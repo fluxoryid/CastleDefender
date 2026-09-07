@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Keep Watch — Tower Defense</title>
+<style>
+  :root {
+    --panel-bg: #1b1f2a;
+    --panel-border: #3a4258;
+    --accent: #ffcc4d;
+    --hp-red: #d64545;
+    --hp-green: #4caf50;
+    font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #0d0f14;
+    color: #e8e8f0;
+    width: 100%; height: 100%;
+    overflow: hidden;
+  }
+  #app {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100vw;
+    height: 100vh;
+    padding: 8px;
+  }
+  header { width: 100%; max-width: 900px; text-align: center; margin-bottom: 6px; }
+  header h1 { margin: 2px 0; font-size: 1.6em; letter-spacing: 1px; color: var(--accent); text-shadow: 0 0 6px rgba(255,204,77,0.4); }
+  header p.subtitle { margin: 0; font-size: 0.8em; color: #9aa0b4; }
+  #gameWrap {
+    position: relative;
+    width: min(900px, 96vw);
+    aspect-ratio: 4 / 3;
+    max-height: 78vh;
+    border: 3px solid var(--panel-border);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 0 24px rgba(0,0,0,0.6);
+    background: #142016;
+  }
+  canvas#game { width: 100%; height: 100%; display: block; background: #1a2b1a; cursor: crosshair; }
+  #hud {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 10px;
+    background: linear-gradient(to bottom, rgba(10,12,18,0.85), rgba(10,12,18,0));
+    pointer-events: none; font-size: 0.85em; font-weight: bold; gap: 6px; flex-wrap: wrap; z-index: 5;
+  }
+  .hud-item { display: flex; align-items: center; gap: 4px; background: rgba(20,24,34,0.7); padding: 3px 8px; border-radius: 6px; border: 1px solid var(--panel-border); pointer-events: auto; }
+  .hud-item.gold { color: var(--accent); }
+  .hud-item.hp { color: #ff8a8a; }
+  .hud-item.wave { color: #8ad0ff; }
+  #hpBarWrap { width: 70px; height: 8px; background: #300; border-radius: 4px; overflow: hidden; border: 1px solid #000; }
+  #hpBarFill { height: 100%; background: linear-gradient(90deg, var(--hp-green), var(--hp-red)); width: 100%; transition: width 0.2s ease; }
+  #controlsBar {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 10px;
+    background: linear-gradient(to top, rgba(10,12,18,0.9), rgba(10,12,18,0));
+    gap: 6px; flex-wrap: wrap; z-index: 5;
+  }
+  .btnbar { display: flex; gap: 4px; flex-wrap: wrap; }
+  button {
+    cursor: pointer; font-family: inherit; font-weight: bold;
+    border: 1px solid var(--panel-border); background: var(--panel-bg); color: #e8e8f0;
+    padding: 6px 10px; border-radius: 6px; font-size: 0.8em;
+    transition: transform 0.08s ease, background 0.15s ease;
+  }
+  button:hover:not(:disabled) { background: #2a3142; transform: translateY(-1px); }
+  button:active:not(:disabled) { transform: translateY(0); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.active { background: var(--accent); color: #201a00; }
+  .tower-btn { display: flex; flex-direction: column; align-items: center; min-width: 62px; line-height: 1.2; }
+  .tower-btn small { font-weight: normal; font-size: 0.75em; opacity: 0.85; }
+  .overlay {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(8,10,16,0.92);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 20px; z-index: 20;
+  }
+  .overlay.hidden { display: none; }
+  .overlay h2 { color: var(--accent); font-size: 1.8em; margin-bottom: 6px; text-shadow: 0 0 8px rgba(255,204,77,0.5); }
+  .overlay p { max-width: 480px; color: #c8c8d8; font-size: 0.95em; }
+  .overlay .big-btn { margin-top: 14px; font-size: 1.1em; padding: 10px 24px; background: var(--accent); color: #201a00; border: none; }
+  .overlay .big-btn:hover { background: #ffd670; }
+  #speedGroup button.active { background: #4caf50; color: #06210a; }
+  #pauseBtn.active { background: #d64545; color: #2a0505; }
+  #tooltip {
+    position: absolute; pointer-events: none;
+    background: rgba(10,12,18,0.95); border: 1px solid var(--panel-border); color: #fff;
+    padding: 6px 10px; border-radius: 6px; font-size: 0.78em; max-width: 220px; z-index: 30;
+    display: none; box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  }
+  #waveBanner {
+    position: absolute; top: 42%; left: 50%; transform: translate(-50%,-50%);
+    font-size: 2em; color: var(--accent); text-shadow: 0 0 12px #000;
+    pointer-events: none; opacity: 0; transition: opacity 0.4s ease; z-index: 15; font-weight: bold;
+  }
+  #waveBanner.show { opacity: 1; }
+  #selPanel {
+    position: absolute; bottom: 44px; left: 50%; transform: translateX(-50%);
+    background: rgba(15,18,26,0.95); border: 1px solid var(--panel-border); border-radius: 8px;
+    padding: 8px 12px; font-size: 0.8em; display: none; z-index: 10; gap: 6px; flex-direction: column; align-items: center;
+  }
+  #selPanel.show { display: flex; }
+  #selPanel .selRow { display: flex; gap: 8px; align-items: center; }
+  footer { margin-top: 6px; font-size: 0.7em; color: #666d80; text-align: center; }
+  @media (max-width: 600px) {
+    header h1 { font-size: 1.2em; }
+    .tower-btn { min-width: 50px; padding: 4px 5px; font-size: 0.7em; }
+    #hud { font-size: 0.7em; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>🏰 Keep Watch</h1>
+    <p class="subtitle">Defend the castle. Place towers along the road. Survive every wave.</p>
+  </header>
+
+  <div id="gameWrap">
+    <canvas id="game" width="900" height="675"></canvas>
+
+    <div id="hud">
+      <div class="hud-item hp">❤️ <span id="hpVal">100</span>/<span id="hpMax">100</span>
+        <div id="hpBarWrap"><div id="hpBarFill"></div></div>
+      </div>
+      <div class="hud-item gold">💰 <span id="goldVal">150</span></div>
+      <div class="hud-item wave">🌊 Wave <span id="waveVal">0</span>/<span id="waveMax">10</span></div>
+    </div>
+
+    <div id="waveBanner"></div>
+
+    <div id="selPanel">
+      <div class="selRow" id="selInfo"></div>
+      <div class="selRow">
+        <button type="button" id="upgradeBtn">⬆ Upgrade</button>
+        <button type="button" id="sellBtn">💰 Sell</button>
+        <button type="button" id="closeSelBtn">✕ Close</button>
+      </div>
+    </div>
+
+    <div id="controlsBar">
+      <div class="btnbar" id="towerBar">
+        <button type="button" class="tower-btn" data-tower="archer">🏹<small>Archer</small><small id="cost-archer">25g</small></button>
+        <button type="button" class="tower-btn" data-tower="cannon">💣<small>Cannon</small><small id="cost-cannon">55g</small></button>
+        <button type="button" class="tower-btn" data-tower="frost">❄️<small>Frost</small><small id="cost-frost">40g</small></button>
+        <button type="button" class="tower-btn" data-tower="sniper">🎯<small>Sniper</small><small id="cost-sniper">75g</small></button>
+      </div>
+      <div class="btnbar" id="speedGroup">
+        <button type="button" id="pauseBtn">⏸ Pause</button>
+        <button type="button" id="speed1x" class="active">1x</button>
+        <button type="button" id="speed2x">2x</button>
+        <button type="button" id="nextWaveBtn">▶ Next Wave</button>
+      </div>
+    </div>
+
+    <div id="startOverlay" class="overlay">
+      <h2>🏰 Keep Watch</h2>
+      <p>An army marches toward your castle. Build towers along the road to destroy enemies before they reach your gates.
+      Earn gold by defeating enemies, and spend it wisely — some enemies are fast, some are armored, and some resist frost.
+      Survive all 10 waves to win. Click a tower button, then click an empty tile near the road to build. Click a placed tower
+      to upgrade or sell it.</p>
+      <button type="button" class="big-btn" id="startBtn">Start Defending</button>
+    </div>
+
+    <div id="endOverlay" class="overlay hidden">
+      <h2 id="endTitle">Game Over</h2>
+      <p id="endText">Your castle has fallen.</p>
+      <button type="button" class="big-btn" id="restartBtn">Play Again</button>
+    </div>
+
+    <div id="tooltip"></div>
+  </div>
+
+  <footer>Click a tower icon, then click a valid tile near the road to build. Click a placed tower to upgrade or sell. Gold is earned by defeating enemies.</footer>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ---------- Canvas / DOM ----------
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const GRID = 45;
+  const COLS = Math.floor(W / GRID);
+  const ROWS = Math.floor(H / GRID);
+
+  const hpValEl = document.getElementById('hpVal');
+  const hpBarFill = document.getElementById('hpBarFill');
+  const goldValEl = document.getElementById('goldVal');
+  const waveValEl = document.getElementById('waveVal');
+  const startOverlay = document.getElementById('startOverlay');
+  const endOverlay = document.getElementById('endOverlay');
+  const endTitle = document.getElementById('endTitle');
+  const endText = document.getElementById('endText');
+  const startBtn = document.getElementById('startBtn');
+  const restartBtn = document.getElementById('restartBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const speed1x = document.getElementById('speed1x');
+  const speed2x = document.getElementById('speed2x');
+  const nextWaveBtn = document.getElementById('nextWaveBtn');
+  const towerBar = document.getElementById('towerBar');
+  const tooltip = document.getElementById('tooltip');
+  const waveBanner = document.getElementById('waveBanner');
+  const gameWrap = document.getElementById('gameWrap');
+  const selPanel = document.getElementById('selPanel');
+  const selInfo = document.getElementById('selInfo');
+  const upgradeBtn = document.getElementById('upgradeBtn');
+  const sellBtn = document.getElementById('sellBtn');
+  const closeSelBtn = document.getElementById('closeSelBtn');
+
+  const MAX_WAVES = 10;
+  const START_HP = 100;
+  const START_GOLD = 150;
+
+  // ---------- Path definition (waypoints in grid coords) ----------
+  const pathGrid = [
+    {c: 0, r: 2}, {c: 4, r: 2}, {c: 4, r: 6}, {c: 9, r: 6},
+    {c: 9, r: 2}, {c: 14, r: 2}, {c: 14, r: 10}, {c: 19, r: 10}
+  ];
+  function gridToPx(pt) { return { x: pt.c * GRID + GRID/2, y: pt.r * GRID + GRID/2 }; }
+  const pathPx = pathGrid.map(gridToPx);
+  const castlePos = pathPx[pathPx.length - 1];
+
+  const segLengths = [];
+  let totalPathLength = 0;
+  for (let i = 0; i < pathPx.length - 1; i++) {
+    const dx = pathPx[i+1].x - pathPx[i].x;
+    const dy = pathPx[i+1].y - pathPx[i].y;
+    const len = Math.hypot(dx, dy);
+    segLengths.push(len);
+    totalPathLength += len;
+  }
+
+  function getPosAtDistance(dist) {
+    if (dist <= 0) return { x: pathPx[0].x, y: pathPx[0].y };
+    let remaining = dist;
+    for (let i = 0; i < segLengths.length; i++) {
+      if (remaining <= segLengths[i]) {
+        const t = segLengths[i] === 0 ? 0 : remaining / segLengths[i];
+        const a = pathPx[i], b = pathPx[i+1];
+        return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+      }
+      remaining -= segLengths[i];
+    }
+    return { x: pathPx[pathPx.length-1].x, y: pathPx[pathPx.length-1].y };
+  }
+
+  function pointToSegmentDist(px, py, ax, ay, bx, by) {
+    const dx = bx - ax, dy = by - ay;
+    const lenSq = dx*dx + dy*dy;
+    let t = lenSq === 0 ? 0 : ((px-ax)*dx + (py-ay)*dy) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+    const cx = ax + t*dx, cy = ay + t*dy;
+    return Math.hypot(px-cx, py-cy);
+  }
+
+  function isTileOnPath(col, row) {
+    const cx = col * GRID + GRID/2, cy = row * GRID + GRID/2;
+    for (let i = 0; i < pathPx.length - 1; i++) {
+      const a = pathPx[i], b = pathPx[i+1];
+      const d = pointToSegmentDist(cx, cy, a.x, a.y, b.x, b.y);
+      if (d < GRID * 0.75) return true;
+    }
+    return false;
+  }
+
+  const blockedTiles = [];
+  for (let r = 0; r < ROWS; r++) {
+    blockedTiles[r] = [];
+    for (let c = 0; c < COLS; c++) blockedTiles[r][c] = isTileOnPath(c, r);
+  }
+
+  // ---------- Tower definitions ----------
+  const TOWER_TYPES = {
+    archer: { name: 'Archer', cost: 25, range: 120, damage: 8, fireRate: 0.55, color: '#8bd450', projSpeed: 480, splash: 0, slow: 0, projColor:'#dfffb0', upgradeCostMult: 1.6 },
+    cannon: { name: 'Cannon', cost: 55, range: 100, damage: 26, fireRate: 1.15, color: '#c47a3a', projSpeed: 320, splash: 55, slow: 0, projColor:'#ffcf8a', upgradeCostMult: 1.7 },
+    frost:  { name: 'Frost',  cost: 40, range: 105, damage: 4,  fireRate: 0.8,  color: '#69c9ff', projSpeed: 400, splash: 0, slow: 0.45, projColor:'#c8f0ff', upgradeCostMult: 1.6 },
+    sniper: { name: 'Sniper', cost: 75, range: 220, damage: 55, fireRate: 1.6,  color: '#d670e0', projSpeed: 900, splash: 0, slow: 0, projColor:'#f5c8ff', upgradeCostMult: 1.8 }
+  };
+
+  document.getElementById('cost-archer').text
